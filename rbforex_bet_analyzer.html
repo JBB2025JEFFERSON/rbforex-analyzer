@@ -146,6 +146,14 @@
   .stat-card{transition:transform .2s, border-color .2s;}
   .stat-card:hover{transform:translateY(-3px);border-color:var(--cyan);}
 
+  /* BILHETE */
+  .ticket-box{
+    background:#0d0920; border:1px dashed var(--gold); border-radius:8px;
+    padding:16px; font-family:Consolas,"Courier New",monospace; font-size:12px; line-height:1.6;
+    color:var(--text); white-space:pre-wrap; word-break:break-word; margin:0;
+    box-shadow:inset 0 0 24px rgba(255,207,64,.06);
+  }
+
   .manual-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
   .manual-col h4{font-size:11px;color:var(--cyan);letter-spacing:1px;margin:0 0 10px;text-transform:uppercase;}
   .manual-row{display:grid;grid-template-columns:1fr 70px;gap:8px;margin-bottom:8px;align-items:center;}
@@ -593,9 +601,83 @@ function renderAnalysis(m){
       <div class="confidence ${conf.cls}">${conf.label}</div>
       <div class="stat-sub">Base: ${bestReason}. Isto é uma leitura estatística, não uma garantia — sempre cheque desfalques, escalação e contexto da rodada antes de decidir.</div>
     </div>
+  </div>
+
+  <div class="panel">
+    <h2>🎫 Bilhete da aposta</h2>
+    <pre class="ticket-box" id="ticketBox"></pre>
+    <div class="row" style="margin-top:12px;">
+      <div><button class="btn-main" id="copyTicketBtn">📋 COPIAR BILHETE</button></div>
+    </div>
+    <div class="hint">O bilhete resume a aposta ideal e os dados calculados acima — cole onde quiser (WhatsApp, notas, etc).</div>
   </div>`;
 
+  $('ticketBox').textContent = buildTicketText({
+    m, wp, o25, btts, fh, cH, cA, kH, kA, sH, sA, hasCorners, hasCards, hasShots,
+    bestLabel, bestReason, conf
+  });
+  $('copyTicketBtn').addEventListener('click', () => copyTicket());
+
   animateVisuals(area);
+}
+
+// ---------- BILHETE (texto copiável, só com dados já calculados acima — nada novo inventado) ----------
+function buildTicketText(ctx){
+  const { m, wp, o25, btts, fh, cH, cA, kH, kA, sH, sA, hasCorners, hasCards, hasShots, bestLabel, bestReason, conf } = ctx;
+  const lines = [];
+  lines.push('🎫 BRUNO & DIEGO — BILHETE DE ANÁLISE');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push(`⚽ ${m.home} x ${m.away}`);
+  if(m.date) lines.push(`🗓 ${m.date}`);
+  if(m.league) lines.push(`🏆 ${m.league}`);
+  lines.push('');
+  lines.push('🎯 APOSTA IDEAL: ' + bestLabel);
+  lines.push('   Confiança: ' + conf.label);
+  lines.push('   Base: ' + bestReason);
+  lines.push('');
+  lines.push('📊 PROBABILIDADES');
+  lines.push(`   Vitória ${m.home}: ${wp.home}%`);
+  lines.push(`   Empate: ${wp.draw}%`);
+  lines.push(`   Vitória ${m.away}: ${wp.away}%`);
+  lines.push(`   Mais de 2.5 gols: ${o25}%`);
+  lines.push(`   Ambas marcam (BTTS): ${btts}%`);
+  lines.push(`   Gol no 1º tempo: ${fh}%`);
+  if(hasCorners){
+    lines.push('');
+    lines.push(`🚩 Escanteios: ${m.home} ${cH.toFixed(1)} | ${m.away} ${cA.toFixed(1)} (total ${(cH+cA).toFixed(1)})`);
+  }
+  if(hasCards){
+    lines.push(`🟨 Cartões: ${m.home} ${kH.toFixed(1)} | ${m.away} ${kA.toFixed(1)} (total ${(kH+kA).toFixed(1)})`);
+  }
+  if(hasShots){
+    lines.push(`🎯 Chutes ao gol: ${m.home} ${sH.toFixed(1)} | ${m.away} ${sA.toFixed(1)} (total ${(sH+sA).toFixed(1)})`);
+  }
+  lines.push('');
+  lines.push('⚠️ Leitura estatística, não garantia. Confira desfalques e escalação antes de apostar.');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push('Gerado por BRUNO & DIEGO Analyzer');
+  return lines.join('\n');
+}
+
+function copyTicket(){
+  const text = $('ticketBox').textContent;
+  const done = () => showToast('✅ Bilhete copiado! Cole onde quiser.');
+  const fail = () => showToast('⚠ Não consegui copiar automaticamente — selecione o texto do bilhete e copie manualmente (Ctrl+C).');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(fail);
+  } else {
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    }catch(e){ fail(); }
+  }
 }
 
 // ---------- VISUAL COMPONENTS (presentation only — no calc logic here) ----------
