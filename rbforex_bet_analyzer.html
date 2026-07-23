@@ -78,6 +78,7 @@
   .match-card .lg{font-size:12px;color:var(--purple);letter-spacing:1px;margin-bottom:8px;font-weight:bold;}
   .match-card .teams{font-size:16px;font-weight:bold;}
   .match-card .date{font-size:13px;color:var(--muted);margin-top:8px;}
+  .soon-badge{display:inline-block;background:linear-gradient(90deg,var(--red),var(--gold));color:#1a0505;font-size:11px;font-weight:bold;letter-spacing:1px;padding:4px 9px;border-radius:20px;margin-bottom:8px;animation:pulse 1.4s infinite;}
 
   /* SCOREBOARD */
   .scoreboard{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
@@ -317,7 +318,7 @@ async function fetchFootballDataMatches(league, authHeaders){
     id:m.id, league:data.competition?.name || league,
     home:m.homeTeam.name, away:m.awayTeam.name,
     homeTeamId:m.homeTeam.id, awayTeamId:m.awayTeam.id,
-    date:toBrasiliaTime(m.utcDate),
+    date:toBrasiliaTime(m.utcDate), kickoffUtc:m.utcDate,
     homeStats:null, awayStats:null // preenchido a partir da classificação real ao selecionar o jogo
   }));
 }
@@ -331,7 +332,7 @@ async function fetchSudamericanaMatches(){
     id:e.idEvent, league:'Copa Sul-Americana',
     home:e.strHomeTeam, away:e.strAwayTeam,
     homeTeamId:null, awayTeamId:null, // TheSportsDB (free) não cruza com classificação/médias de gols
-    date:toBrasiliaTime(e.strTimestamp),
+    date:toBrasiliaTime(e.strTimestamp), kickoffUtc:e.strTimestamp,
     homeStats:null, awayStats:null
   }));
 }
@@ -400,6 +401,15 @@ function showToast(msg){
 }
 
 // ---------- RENDER MATCH LIST ----------
+function isStartingSoon(kickoffUtc){
+  if(!kickoffUtc) return false;
+  const iso = kickoffUtc.endsWith('Z') ? kickoffUtc : kickoffUtc + 'Z';
+  const kickoff = new Date(iso).getTime();
+  if(isNaN(kickoff)) return false;
+  const diffMs = kickoff - Date.now();
+  return diffMs > 0 && diffMs <= 60*60*1000; // começa em até 1h, ainda não passou
+}
+
 function renderMatches(){
   $('matchesPanel').style.display = 'block';
   const list = $('matchesList');
@@ -407,7 +417,8 @@ function renderMatches(){
   currentMatches.forEach(m => {
     const card = document.createElement('div');
     card.className = 'match-card';
-    card.innerHTML = `<div class="lg">${m.league}</div><div class="teams">${m.home} × ${m.away}</div><div class="date">${m.date}</div>`;
+    const soonBadge = isStartingSoon(m.kickoffUtc) ? `<div class="soon-badge">⏰ COMEÇA EM BREVE</div>` : '';
+    card.innerHTML = `${soonBadge}<div class="lg">${m.league}</div><div class="teams">${m.home} × ${m.away}</div><div class="date">${m.date}</div>`;
     card.addEventListener('click', () => selectMatch(m, card));
     list.appendChild(card);
   });
