@@ -196,6 +196,7 @@
             <option value="CLI">Copa Libertadores</option>
             <option value="EC">Eurocopa</option>
             <option value="WC">Copa do Mundo FIFA</option>
+            <option value="SUDAM">Copa Sul-Americana</option>
           </optgroup>
         </select>
       </div>
@@ -208,6 +209,8 @@
       Crie sua key grátis em <a href="https://www.football-data.org/client/register" target="_blank">football-data.org/client/register</a> (plano free: ~10 requisições/min).
       Esse plano cobre jogos, resultados e classificação — <b>não</b> inclui escanteios/cartões/chutes, que você preenche manualmente abaixo com dados reais (FotMob/Sofascore/WhoScored) para o motor calcular a projeção.
       A lista acima é <b>todo o catálogo gratuito</b> da football-data.org (13 competições) — cobre os principais campeonatos que casas como Bet365/Betano/Superbet também listam, mas não é literalmente toda liga do mundo (ligas menores/regionais exigem plano pago da API).
+      <b>Copa Sul-Americana</b> usa uma fonte diferente (TheSportsDB, também grátis) — só confrontos e horários, sem classificação/médias de gols automáticas.
+      Todos os horários exibidos já são convertidos para <b>horário de Brasília</b>.
       Sua key fica só nesta sessão do navegador, nunca é salva.
     </div>
   </div>
@@ -280,59 +283,97 @@ fetch('/api/config').then(r => {
   hasBackend = false;
 });
 
-// ---------- FOOTBALL-DATA.ORG FETCH ----------
+// Converte uma data/hora UTC (string ISO, com ou sem 'Z') para horário de Brasília (America/Sao_Paulo).
+function toBrasiliaTime(utcIsoString){
+  if(!utcIsoString) return '';
+  const iso = utcIsoString.endsWith('Z') ? utcIsoString : utcIsoString + 'Z';
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:false
+  }).formatToParts(d);
+  const get = t => parts.find(p => p.type === t)?.value || '';
+  return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')} (Brasília)`;
+}
+
+async function fetchFootballDataMatches(league, authHeaders){
+  const res = await fetch(`/api/matches/${league}`, { headers: authHeaders });
+  if(!res.ok){
+    if(res.status === 429) throw new Error('Limite de requisições atingido (plano free ~10/min). Espere um instante e tente de novo.');
+    throw new Error('Erro '+res.status+' — verifique a key ou tente novamente em instantes.');
+  }
+  const data = await res.json();
+  return (data.matches || []).slice(0,12).map(m => ({
+    id:m.id, league:data.competition?.name || league,
+    home:m.homeTeam.name, away:m.awayTeam.name,
+    homeTeamId:m.homeTeam.id, awayTeamId:m.awayTeam.id,
+    date:toBrasiliaTime(m.utcDate),
+    homeStats:null, awayStats:null // preenchido a partir da classificação real ao selecionar o jogo
+  }));
+}
+
+async function fetchSudamericanaMatches(){
+  const res = await fetch('/api/sudamericana/matches');
+  if(!res.ok) throw new Error('Erro '+res.status+' ao buscar Copa Sul-Americana (TheSportsDB).');
+  const data = await res.json();
+  const events = data.events || [];
+  return events.slice(0,12).map(e => ({
+    id:e.idEvent, league:'Copa Sul-Americana',
+    home:e.strHomeTeam, away:e.strAwayTeam,
+    homeTeamId:null, awayTeamId:null, // TheSportsDB (free) não cruza com classificação/médias de gols
+    date:toBrasiliaTime(e.strTimestamp),
+    homeStats:null, awayStats:null
+  }));
+}
+
+async function fetchStandingsForLeague(league, authHeaders, matchCount){
+  try{
+    const stRes = await fetch(`/api/standings/${league}`, { headers: authHeaders });
+    if(stRes.ok){
+      const stData = await stRes.json();
+      const table = (stData.standings || []).find(s => s.type === 'TOTAL')?.table || [];
+      table.forEach(row => {
+        currentStandings[row.team.id] = {
+          playedGames: row.playedGames,
+          goalsFor: row.goalsFor,
+          goalsAgainst: row.goalsAgainst,
+          form: row.form || null // nem toda liga/plano retorna form
+        };
+      });
+      setStatus('<b>'+matchCount+'</b> jogos + classificação real carregados via football-data.org', true);
+    } else {
+      setStatus('<b>'+matchCount+'</b> jogos carregados · classificação indisponível (usando médias neutras)', true);
+    }
+  }catch(stErr){
+    setStatus('<b>'+matchCount+'</b> jogos carregados · classificação indisponível (usando médias neutras)', true);
+  }
+}
+
+// ---------- BUSCA DE JOGOS (football-data.org ou TheSportsDB pra Sul-Americana) ----------
 $('loadBtn').addEventListener('click', async () => {
   const key = $('fdKey').value.trim();
   const league = $('league').value;
   if(!hasBackend){
-    showToast('Busca ao vivo via football-data.org precisa de um servidor de verdade por trás (local ou hospedado) fazendo o proxy da API. Nesta prévia estática, use "DADOS DE EXEMPLO".');
+    showToast('Busca ao vivo precisa de um servidor de verdade por trás (local ou hospedado) fazendo o proxy da API. Nesta prévia estática, use "DADOS DE EXEMPLO".');
     return;
   }
   setStatus('Buscando jogos...', true);
   currentStandings = {};
   const authHeaders = key ? {'X-Auth-Token': key} : {}; // vazio = servidor usa a key padrão do .env
   try{
-    const res = await fetch(`/api/matches/${league}`, {
-      headers: authHeaders
-    });
-    if(!res.ok){
-      if(res.status === 429) throw new Error('Limite de requisições atingido (plano free ~10/min). Espere um instante e tente de novo.');
-      throw new Error('Erro '+res.status+' — verifique a key ou tente novamente em instantes.');
-    }
-    const data = await res.json();
-    const matches = (data.matches || []).slice(0,12).map(m => ({
-      id:m.id, league:data.competition?.name || league,
-      home:m.homeTeam.name, away:m.awayTeam.name,
-      homeTeamId:m.homeTeam.id, awayTeamId:m.awayTeam.id,
-      date:(m.utcDate||'').replace('T',' ').slice(0,16),
-      homeStats:null, awayStats:null // preenchido a partir da classificação real ao selecionar o jogo
-    }));
-    if(matches.length === 0){ setStatus('Nenhum jogo agendado encontrado nessa liga agora.', true); return; }
+    const isSudam = league === 'SUDAM';
+    const matches = isSudam ? await fetchSudamericanaMatches() : await fetchFootballDataMatches(league, authHeaders);
+    if(matches.length === 0){ setStatus('Nenhum jogo agendado encontrado nessa competição agora.', true); return; }
     currentMatches = matches;
     renderMatches();
-    setStatus('<b>'+matches.length+'</b> jogos carregados via football-data.org · buscando classificação...', true);
-
-    // Busca a classificação da liga (gols pró/contra e jogos disputados reais por time).
-    // Uma única chamada cobre todos os times da liga — não conta contra o limite por jogo.
-    try{
-      const stRes = await fetch(`/api/standings/${league}`, { headers: authHeaders });
-      if(stRes.ok){
-        const stData = await stRes.json();
-        const table = (stData.standings || []).find(s => s.type === 'TOTAL')?.table || [];
-        table.forEach(row => {
-          currentStandings[row.team.id] = {
-            playedGames: row.playedGames,
-            goalsFor: row.goalsFor,
-            goalsAgainst: row.goalsAgainst,
-            form: row.form || null // nem toda liga/plano retorna form
-          };
-        });
-        setStatus('<b>'+matches.length+'</b> jogos + classificação real carregados via football-data.org', true);
-      } else {
-        setStatus('<b>'+matches.length+'</b> jogos carregados · classificação indisponível (usando médias neutras)', true);
-      }
-    }catch(stErr){
-      setStatus('<b>'+matches.length+'</b> jogos carregados · classificação indisponível (usando médias neutras)', true);
+    if(isSudam){
+      setStatus('<b>'+matches.length+'</b> jogos carregados via TheSportsDB (Copa Sul-Americana)', true);
+    } else {
+      setStatus('<b>'+matches.length+'</b> jogos carregados via football-data.org · buscando classificação...', true);
+      // Busca a classificação da liga (gols pró/contra e jogos disputados reais por time).
+      // Uma única chamada cobre todos os times da liga — não conta contra o limite por jogo.
+      await fetchStandingsForLeague(league, authHeaders, matches.length);
     }
   }catch(err){
     setStatus('Falha na conexão', false);

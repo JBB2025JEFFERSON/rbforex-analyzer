@@ -59,6 +59,21 @@ app.get('/api/standings/:league', (req, res) => {
   proxyFootballData(req, res, `/competitions/${league}/standings`);
 });
 
+// Copa Sul-Americana não está no catálogo free da football-data.org — usa TheSportsDB
+// (API gratuita, key de teste pública "3", sem cadastro necessário) como fonte alternativa.
+const THESPORTSDB_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
+const SUDAMERICANA_LEAGUE_ID = '4724';
+
+app.get('/api/sudamericana/matches', async (req, res) => {
+  try {
+    const upstream = await fetch(`${THESPORTSDB_BASE}/eventsnextleague.php?id=${SUDAMERICANA_LEAGUE_ID}`);
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    res.status(502).json({ error: 'Falha ao contatar TheSportsDB', details: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`RBFOREX Analyzer rodando em http://localhost:${PORT}`);
 });
