@@ -434,11 +434,12 @@ function buildStatsFromStandings(teamId){
       gf: +(entry.goalsFor / entry.playedGames).toFixed(2),
       ga: +(entry.goalsAgainst / entry.playedGames).toFixed(2),
       form: entry.form ? entry.form.split(',').filter(Boolean).slice(-5) : null,
-      corners:null, cards:null, shots:null
+      corners:null, cards:null, shots:null, isFallback:false
     };
   }
-  // sem classificação disponível para esse time (falha na chamada, ou liga sem dado) — média neutra, forma desconhecida
-  return {gf:1.3, ga:1.3, form:null, corners:null, cards:null, shots:null};
+  // sem classificação disponível para esse time (falha na chamada, ou fonte/liga sem esse dado, ex: Copa Sul-Americana via TheSportsDB)
+  // — média neutra só pra não travar o cálculo, isFallback:true avisa a UI que isso NÃO é análise real.
+  return {gf:1.3, ga:1.3, form:null, corners:null, cards:null, shots:null, isFallback:true};
 }
 
 // ---------- MANUAL STAT INPUTS ----------
@@ -491,6 +492,10 @@ function poissonWinProb(gfH, gaH, gfA, gaA){
 }
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 
+function over15Prob(totalXG){
+  // rough mapping of expected goals to P(over 1.5) — mesma lógica heurística do over 2.5, threshold menor
+  return Math.round(clamp(55 + (totalXG-1.5)*20, 20, 96));
+}
 function over25Prob(totalXG){
   // rough mapping of expected goals to P(over 2.5)
   return Math.round(clamp(28 + (totalXG-2.0)*24, 8, 92));
@@ -509,7 +514,11 @@ function formHtml(arr){
 
 function renderAnalysis(m){
   const hs = m.homeStats, as_ = m.awayStats;
+  // isFallback = time sem gols médios reais nesta fonte (ex: Copa Sul-Americana via TheSportsDB não tem isso) —
+  // quando true, TODAS as probabilidades de vitória/over-under/BTTS abaixo são neutras (não uma análise real).
+  const noRealGoalsData = !!(hs.isFallback || as_.isFallback);
   const wp = poissonWinProb(hs.gf, hs.ga, as_.gf, as_.ga);
+  const o15 = over15Prob(wp.totalXG);
   const o25 = over25Prob(wp.totalXG);
   const btts = bttsProb(hs.gf, hs.ga, as_.gf, as_.ga);
   const fh = firstHalfGoalProb(wp.totalXG);
@@ -521,26 +530,34 @@ function renderAnalysis(m){
   const hasCards = kH!=null && kA!=null;
   const hasShots = sH!=null && sA!=null;
 
-  // best entry logic — pick the strongest signal
+  // best entry logic — pick the strongest signal.
+  // Sinais de vitória/over-under/BTTS só entram na disputa se houver gols reais (noRealGoalsData=false) —
+  // senão estaríamos escolhendo uma "aposta ideal" em cima de puro placeholder neutro, o que é desonesto.
   let bestLabel, bestReason;
-  const signals = [
-    {label:`${wp.home > wp.away ? m.home : m.away} vencer`, val:Math.max(wp.home,wp.away), reason:'maior probabilidade de resultado no modelo de xG'},
-    {label:o25>=60?'Mais de 2.5 gols':'Menos de 2.5 gols', val:o25>=60?o25:100-o25, reason:'expectativa de gols do confronto'},
-    {label:btts>=60?'Ambas marcam - Sim':'Ambas marcam - Não', val:btts>=60?btts:100-btts, reason:'perfil ofensivo/defensivo das duas equipes'}
-  ];
+  const signals = [];
+  if(!noRealGoalsData){
+    signals.push(
+      {label:`${wp.home > wp.away ? m.home : m.away} vencer`, val:Math.max(wp.home,wp.away), reason:'maior probabilidade de resultado no modelo de xG'},
+      {label:o25>=60?'Mais de 2.5 gols':'Menos de 2.5 gols', val:o25>=60?o25:100-o25, reason:'expectativa de gols do confronto'},
+      {label:btts>=60?'Ambas marcam - Sim':'Ambas marcam - Não', val:btts>=60?btts:100-btts, reason:'perfil ofensivo/defensivo das duas equipes'}
+    );
+  }
   if(hasCorners){
     const moreCorners = cH>=cA ? m.home : m.away;
-    signals.push({label:`${moreCorners} - mais escanteios`, val:60, reason:'média de escanteios superior'});
+    signals.push({label:`${moreCorners} - mais escanteios`, val:60, reason:'média de escanteios superior (dado real informado)'});
   }
-  signals.sort((a,b)=>b.val-a.val);
-  bestLabel = signals[0].label;
-  bestReason = signals[0].reason;
-
-  // confidence badge — margin between top signal and runner-up (presentation only, no change to underlying calc)
-  const margin = signals[0].val - (signals[1] ? signals[1].val : 0);
-  const conf = margin>=15 ? {cls:'conf-alta', label:'ALTA CONFIANÇA'}
-             : margin>=7  ? {cls:'conf-media', label:'CONFIANÇA MÉDIA'}
-             : {cls:'conf-baixa', label:'CONFIANÇA BAIXA'};
+  const hasValidSignal = signals.length > 0;
+  let conf = {cls:'conf-baixa', label:'CONFIANÇA BAIXA'};
+  if(hasValidSignal){
+    signals.sort((a,b)=>b.val-a.val);
+    bestLabel = signals[0].label;
+    bestReason = signals[0].reason;
+    // confidence badge — margin between top signal and runner-up (presentation only, no change to underlying calc)
+    const margin = signals[0].val - (signals[1] ? signals[1].val : 0);
+    conf = margin>=15 ? {cls:'conf-alta', label:'ALTA CONFIANÇA'}
+         : margin>=7  ? {cls:'conf-media', label:'CONFIANÇA MÉDIA'}
+         : {cls:'conf-baixa', label:'CONFIANÇA BAIXA'};
+  }
 
   const area = $('analysisArea');
   area.innerHTML = `
@@ -558,10 +575,21 @@ function renderAnalysis(m){
       </div>
     </div>
 
+    ${noRealGoalsData ? `
+    <div class="hint" style="border:1px solid var(--red);border-radius:10px;padding:14px 16px;margin-top:14px;color:var(--red);font-weight:bold;line-height:1.6;">
+      ⚠️ SEM DADOS REAIS DE GOLS para ${m.home} e/ou ${m.away} nesta fonte (ex: Copa Sul-Americana via TheSportsDB não fornece isso).
+      As probabilidades abaixo (vitória, over/under, BTTS, 1º tempo) usam um valor neutro igual pros dois times — <u>não são uma análise real</u>, só um placeholder pra não travar o cálculo.
+    </div>` : ''}
+
     <div class="stats">
       <div class="stat-card">
         <h3>Probabilidade de vitória</h3>
         ${splitBarHtml(wp.home, wp.draw, wp.away, m.home, m.away)}
+      </div>
+
+      <div class="stat-card">
+        <h3>Mais de 1.5 gols</h3>
+        ${radialGaugeHtml(o15, 'var(--green)')}
       </div>
 
       <div class="stat-card">
@@ -596,12 +624,17 @@ function renderAnalysis(m){
       </div>
     </div>
 
+    ${hasValidSignal ? `
     <div class="best-entry">
       <h2>🎯 Melhor entrada (segundo o modelo)</h2>
       <div class="pick">${bestLabel}</div>
       <div class="confidence ${conf.cls}">${conf.label}</div>
       <div class="stat-sub">Base: ${bestReason}. Isto é uma leitura estatística, não uma garantia — sempre cheque desfalques, escalação e contexto da rodada antes de decidir.</div>
-    </div>
+    </div>` : `
+    <div class="best-entry" style="border-color:var(--red);">
+      <h2 style="color:var(--red);">⚠️ Sem dados reais suficientes</h2>
+      <div class="stat-sub">Não há gols reais nem escanteios/cartões/chutes preenchidos pra esse confronto — não vamos sugerir uma "aposta ideal" em cima de puro placeholder. Preencha os dados reais abaixo (escanteios/cartões/chutes) pra habilitar uma recomendação de verdade.</div>
+    </div>`}
   </div>
 
   <div class="panel">
@@ -614,8 +647,8 @@ function renderAnalysis(m){
   </div>`;
 
   $('ticketBox').textContent = buildTicketText({
-    m, wp, o25, btts, fh, cH, cA, kH, kA, sH, sA, hasCorners, hasCards, hasShots,
-    bestLabel, bestReason, conf
+    m, wp, o15, o25, btts, fh, cH, cA, kH, kA, sH, sA, hasCorners, hasCards, hasShots,
+    bestLabel, bestReason, conf, noRealGoalsData, hasValidSignal
   });
   $('copyTicketBtn').addEventListener('click', () => copyTicket());
 
@@ -623,8 +656,14 @@ function renderAnalysis(m){
 }
 
 // ---------- BILHETE (texto copiável, só com dados já calculados acima — nada novo inventado) ----------
+function pctPair(homeVal, awayVal){
+  const total = homeVal + awayVal;
+  if(total <= 0) return {home:0, away:0};
+  return {home: Math.round(homeVal/total*100), away: Math.round(awayVal/total*100)};
+}
+
 function buildTicketText(ctx){
-  const { m, wp, o25, btts, fh, cH, cA, kH, kA, sH, sA, hasCorners, hasCards, hasShots, bestLabel, bestReason, conf } = ctx;
+  const { m, wp, o15, o25, btts, fh, cH, cA, kH, kA, sH, sA, hasCorners, hasCards, hasShots, bestLabel, bestReason, conf, noRealGoalsData, hasValidSignal } = ctx;
   const lines = [];
   lines.push('🎫 BRUNO & DIEGO — BILHETE DE ANÁLISE');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -632,26 +671,42 @@ function buildTicketText(ctx){
   if(m.date) lines.push(`🗓 ${m.date}`);
   if(m.league) lines.push(`🏆 ${m.league}`);
   lines.push('');
-  lines.push('🎯 APOSTA IDEAL: ' + bestLabel);
-  lines.push('   Confiança: ' + conf.label);
-  lines.push('   Base: ' + bestReason);
-  lines.push('');
-  lines.push('📊 PROBABILIDADES');
-  lines.push(`   Vitória ${m.home}: ${wp.home}%`);
-  lines.push(`   Empate: ${wp.draw}%`);
-  lines.push(`   Vitória ${m.away}: ${wp.away}%`);
-  lines.push(`   Mais de 2.5 gols: ${o25}%`);
-  lines.push(`   Ambas marcam (BTTS): ${btts}%`);
-  lines.push(`   Gol no 1º tempo: ${fh}%`);
-  if(hasCorners){
+  if(noRealGoalsData){
+    lines.push('⚠️ SEM DADOS REAIS DE GOLS pra um ou ambos os times nesta fonte.');
+    lines.push('   As probabilidades de vitória/over-under/BTTS abaixo NÃO valem —');
+    lines.push('   são só um placeholder neutro, não uma análise real.');
     lines.push('');
-    lines.push(`🚩 Escanteios: ${m.home} ${cH.toFixed(1)} | ${m.away} ${cA.toFixed(1)} (total ${(cH+cA).toFixed(1)})`);
+  }
+  if(hasValidSignal){
+    lines.push('🎯 APOSTA IDEAL: ' + bestLabel);
+    lines.push('   Confiança: ' + conf.label);
+    lines.push('   Base: ' + bestReason);
+  } else {
+    lines.push('🎯 APOSTA IDEAL: sem dados reais suficientes pra recomendar');
+  }
+  lines.push('');
+  if(!noRealGoalsData){
+    lines.push('📊 PROBABILIDADES (modelo de xG a partir de gols reais)');
+    lines.push(`   Vitória ${m.home}: ${wp.home}%`);
+    lines.push(`   Empate: ${wp.draw}%`);
+    lines.push(`   Vitória ${m.away}: ${wp.away}%`);
+    lines.push(`   Mais de 1.5 gols: ${o15}%`);
+    lines.push(`   Mais de 2.5 gols: ${o25}%`);
+    lines.push(`   Ambas marcam (BTTS): ${btts}%`);
+    lines.push(`   Gol no 1º tempo: ${fh}%`);
+  }
+  if(hasCorners){
+    const p = pctPair(cH, cA);
+    lines.push('');
+    lines.push(`🚩 Escanteios: ${m.home} ${cH.toFixed(1)} (${p.home}%) | ${m.away} ${cA.toFixed(1)} (${p.away}%) — total ${(cH+cA).toFixed(1)}`);
   }
   if(hasCards){
-    lines.push(`🟨 Cartões: ${m.home} ${kH.toFixed(1)} | ${m.away} ${kA.toFixed(1)} (total ${(kH+kA).toFixed(1)})`);
+    const p = pctPair(kH, kA);
+    lines.push(`🟨 Cartões: ${m.home} ${kH.toFixed(1)} (${p.home}%) | ${m.away} ${kA.toFixed(1)} (${p.away}%) — total ${(kH+kA).toFixed(1)}`);
   }
   if(hasShots){
-    lines.push(`🎯 Chutes ao gol: ${m.home} ${sH.toFixed(1)} | ${m.away} ${sA.toFixed(1)} (total ${(sH+sA).toFixed(1)})`);
+    const p = pctPair(sH, sA);
+    lines.push(`🎯 Chutes ao gol: ${m.home} ${sH.toFixed(1)} (${p.home}%) | ${m.away} ${sA.toFixed(1)} (${p.away}%) — total ${(sH+sA).toFixed(1)}`);
   }
   lines.push('');
   lines.push('⚠️ Leitura estatística, não garantia. Confira desfalques e escalação antes de apostar.');
@@ -717,12 +772,12 @@ function dualBarHtml(homeName, homeVal, awayName, awayVal){
     <div class="dual-row">
       <div class="dual-label">${homeName}</div>
       <div class="dual-track"><div class="dual-fill dual-home" data-target="${homePct}"></div></div>
-      <div class="dual-num">${homeVal.toFixed(1)}</div>
+      <div class="dual-num">${homeVal.toFixed(1)} <span style="color:var(--muted);font-size:11px;">(${homePct.toFixed(0)}%)</span></div>
     </div>
     <div class="dual-row">
       <div class="dual-label">${awayName}</div>
       <div class="dual-track"><div class="dual-fill dual-away" data-target="${awayPct}"></div></div>
-      <div class="dual-num">${awayVal.toFixed(1)}</div>
+      <div class="dual-num">${awayVal.toFixed(1)} <span style="color:var(--muted);font-size:11px;">(${awayPct.toFixed(0)}%)</span></div>
     </div>
     <div class="dual-total">Total combinado: <b>${total.toFixed(1)}</b></div>`;
 }
