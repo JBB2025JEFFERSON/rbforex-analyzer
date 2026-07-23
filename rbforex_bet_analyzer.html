@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>BRUNO & DIEGO</title>
+<style>
+  :root{
+    --bg:#0a0714;
+    --bg2:#120c22;
+    --panel:#17102b;
+    --panel2:#1e1638;
+    --line:#2c2148;
+    --cyan:#00e5ff;
+    --gold:#ffcf40;
+    --purple:#8b5cf6;
+    --text:#e9e6f5;
+    --muted:#8f89ab;
+    --green:#34d399;
+    --red:#ff4d6d;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh;
+    background:
+      radial-gradient(circle at 15% 0%, #241a44 0%, transparent 45%),
+      radial-gradient(circle at 90% 15%, #142235 0%, transparent 40%),
+      var(--bg);
+    color:var(--text);
+    font-family:Consolas,"Courier New",monospace;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px;}
+
+  /* HEADER */
+  header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:22px;}
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand .dot{width:14px;height:14px;border-radius:50%;
+    background:conic-gradient(from 0deg,var(--cyan),var(--purple),var(--gold),var(--red),var(--cyan));
+    box-shadow:0 0 16px rgba(255,207,64,.5);animation:pulse 2s infinite, spin 4s linear infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .brand h1{font-family:"Orbitron",Consolas,monospace;font-size:26px;font-weight:900;letter-spacing:3px;margin:0;
+    background:linear-gradient(90deg,var(--cyan),var(--purple),var(--gold),var(--red),var(--cyan));
+    background-size:300% auto;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:brandShine 5s linear infinite;text-shadow:0 0 30px rgba(139,92,246,.35);}
+  @keyframes brandShine{to{background-position:300% center;}}
+  .brand span{font-size:11px;font-weight:bold;letter-spacing:2.5px;
+    background:linear-gradient(90deg,var(--gold),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .status{font-size:11px;color:var(--muted);text-align:right;}
+  .status b{color:var(--gold);}
+
+  /* PANELS */
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px;position:relative;overflow:hidden;}
+  .panel:before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),var(--purple),var(--gold));opacity:.7;}
+  .panel h2{font-size:12px;letter-spacing:2px;color:var(--gold);margin:0 0 12px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+  .panel h2:before{content:"▍";color:var(--cyan);}
+
+  /* CONFIG */
+  .cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  label{font-size:10px;color:var(--muted);letter-spacing:1px;display:block;margin-bottom:4px;text-transform:uppercase;}
+  input,select{width:100%;background:#0d0920;border:1px solid var(--line);color:var(--text);padding:9px 10px;border-radius:6px;font-family:Consolas,monospace;font-size:12px;}
+  input:focus,select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,229,255,.15);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+  .row > div{flex:1;min-width:150px;}
+  button{cursor:pointer;font-family:Consolas,monospace;font-weight:bold;letter-spacing:1px;border:none;border-radius:6px;padding:10px 16px;font-size:12px;}
+  .btn-main{background:linear-gradient(90deg,var(--cyan),var(--purple));color:#08051a;}
+  .btn-main:hover{filter:brightness(1.15);}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--muted);}
+  .btn-ghost:hover{border-color:var(--cyan);color:var(--cyan);}
+  .hint{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;}
+  .hint a{color:var(--cyan);}
+
+  /* MATCH LIST */
+  .matches{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;}
+  .match-card{background:#0d0920;border:1px solid var(--line);border-radius:8px;padding:12px;cursor:pointer;transition:.15s;}
+  .match-card:hover{border-color:var(--cyan);transform:translateY(-2px);}
+  .match-card.active{border-color:var(--gold);box-shadow:0 0 14px rgba(255,207,64,.25);}
+  .match-card .lg{font-size:9px;color:var(--purple);letter-spacing:1px;margin-bottom:6px;}
+  .match-card .teams{font-size:13px;font-weight:bold;}
+  .match-card .date{font-size:10px;color:var(--muted);margin-top:6px;}
+
+  /* SCOREBOARD */
+  .scoreboard{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+  .team{flex:1;text-align:center;min-width:140px;}
+  .team .name{font-size:16px;font-weight:bold;letter-spacing:1px;}
+  .team .form{margin-top:6px;font-size:11px;}
+  .form span{display:inline-block;width:18px;height:18px;line-height:18px;border-radius:3px;margin:0 2px;font-size:10px;font-weight:bold;}
+  .fW{background:var(--green);color:#04150e;}
+  .fD{background:var(--gold);color:#241b04;}
+  .fL{background:var(--red);color:#25050c;}
+  .vs{font-family:"Orbitron",Consolas,monospace;color:var(--gold);font-size:20px;padding:0 10px;}
+
+  /* STAT GRID */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:16px;}
+  .stat-card{background:#0d0920;border:1px solid var(--line);border-radius:10px;padding:14px;}
+  .stat-card h3{font-size:10px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin:0 0 10px;}
+  .gauge-wrap{display:flex;align-items:center;gap:12px;}
+  .gauge-num{font-family:"Orbitron",Consolas,monospace;font-size:26px;font-weight:bold;}
+  .bar-bg{flex:1;height:8px;border-radius:5px;background:#241a3f;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--cyan),var(--gold));}
+  .stat-sub{font-size:10px;color:var(--muted);margin-top:8px;}
+  .team-split{display:flex;justify-content:space-between;font-size:11px;margin-top:10px;}
+  .team-split div{flex:1;}
+  .team-split .val{font-size:15px;font-weight:bold;color:var(--cyan);}
+
+  .best-entry{margin-top:16px;border:1px solid var(--gold);border-radius:10px;padding:20px;background:linear-gradient(180deg,rgba(255,207,64,.1),transparent);position:relative;overflow:hidden;animation:glow 2.4s ease-in-out infinite;}
+  @keyframes glow{0%,100%{box-shadow:0 0 18px rgba(255,207,64,.15)}50%{box-shadow:0 0 34px rgba(255,207,64,.4)}}
+  .best-entry h2{color:var(--gold);}
+  .best-entry .pick{font-family:"Orbitron",Consolas,monospace;font-size:24px;font-weight:bold;color:var(--text);margin-top:10px;letter-spacing:1px;
+    background:linear-gradient(90deg,var(--gold),#fff6d8,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;background-size:200% auto;animation:shine 3s linear infinite;}
+  @keyframes shine{to{background-position:200% center;}}
+  .confidence{display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;font-weight:bold;padding:4px 10px;border-radius:20px;margin-top:12px;}
+  .conf-alta{background:rgba(52,211,153,.15);color:var(--green);border:1px solid var(--green);}
+  .conf-media{background:rgba(255,207,64,.15);color:var(--gold);border:1px solid var(--gold);}
+  .conf-baixa{background:rgba(255,77,109,.15);color:var(--red);border:1px solid var(--red);}
+
+  /* ANIMATED PROBABILITY VISUALS */
+  .split-bar{display:flex;height:16px;border-radius:8px;overflow:hidden;margin-top:14px;background:#241a3f;box-shadow:inset 0 0 0 1px var(--line);}
+  .split-bar .seg{height:100%;width:0%;transition:width 1.1s cubic-bezier(.16,1,.3,1);}
+  .seg-home{background:linear-gradient(90deg,var(--cyan),#33f0ff);}
+  .seg-draw{background:linear-gradient(90deg,var(--gold),#ffe38a);}
+  .seg-away{background:linear-gradient(90deg,var(--purple),#b794f6);}
+  .split-legend{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;}
+  .split-legend b{font-size:14px;display:block;margin-top:2px;}
+  .split-legend .lh b{color:var(--cyan);}
+  .split-legend .ld b{color:var(--gold);}
+  .split-legend .la b{color:var(--purple);}
+
+  .radial-wrap{position:relative;width:92px;height:92px;margin:6px auto 0;}
+  .radial-svg{width:92px;height:92px;transform:rotate(-90deg);}
+  .radial-bg{fill:none;stroke:#241a3f;stroke-width:9;}
+  .radial-fill{fill:none;stroke-width:9;stroke-linecap:round;stroke-dasharray:213.63;stroke-dashoffset:213.63;transition:stroke-dashoffset 1.15s cubic-bezier(.16,1,.3,1);}
+  .radial-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Orbitron",Consolas,monospace;font-size:19px;font-weight:bold;}
+
+  .dual-row{display:grid;grid-template-columns:64px 1fr 42px;gap:8px;align-items:center;margin-bottom:8px;font-size:11px;}
+  .dual-row .dual-label{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dual-track{height:9px;border-radius:5px;background:#241a3f;overflow:hidden;}
+  .dual-fill{height:100%;width:0%;border-radius:5px;transition:width 1.1s cubic-bezier(.16,1,.3,1);}
+  .dual-home{background:linear-gradient(90deg,var(--cyan),var(--purple));}
+  .dual-away{background:linear-gradient(90deg,var(--purple),var(--red));}
+  .dual-num{text-align:right;font-weight:bold;color:var(--text);}
+  .dual-total{font-size:10px;color:var(--muted);margin-top:2px;}
+  .dual-total b{color:var(--gold);}
+
+  @keyframes slideIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  #analysisArea .panel{animation:slideIn .45s ease-out;}
+  .stat-card{transition:transform .2s, border-color .2s;}
+  .stat-card:hover{transform:translateY(-3px);border-color:var(--cyan);}
+
+  .manual-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .manual-col h4{font-size:11px;color:var(--cyan);letter-spacing:1px;margin:0 0 10px;text-transform:uppercase;}
+  .manual-row{display:grid;grid-template-columns:1fr 70px;gap:8px;margin-bottom:8px;align-items:center;}
+  .manual-row label{margin:0;font-size:11px;color:var(--text);}
+
+  .empty{text-align:center;padding:40px 10px;color:var(--muted);font-size:12px;}
+  .toast{position:fixed;bottom:18px;right:18px;background:var(--panel2);border:1px solid var(--cyan);padding:10px 16px;border-radius:8px;font-size:12px;box-shadow:0 0 20px rgba(0,229,255,.2);z-index:50;max-width:320px;}
+  @media(max-width:640px){.cfg-grid,.manual-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <h1>BRUNO &amp; DIEGO</h1>
+        <span>ANÁLISE CASA DE APOSTAS</span>
+      </div>
+    </div>
+    <div class="status" id="statusBox">Sem conexão · configure a API abaixo</div>
+  </header>
+
+  <div class="panel">
+    <h2>Fonte de dados</h2>
+    <div class="cfg-grid">
+      <div>
+        <label>API Key football-data.org (grátis)</label>
+        <input id="fdKey" type="password" placeholder="cole sua key aqui">
+      </div>
+      <div>
+        <label>Liga</label>
+        <select id="league">
+          <option value="PL">Premier League (Inglaterra)</option>
+          <option value="PD">La Liga (Espanha)</option>
+          <option value="BL1">Bundesliga (Alemanha)</option>
+          <option value="SA">Serie A (Itália)</option>
+          <option value="FL1">Ligue 1 (França)</option>
+          <option value="BSA">Brasileirão Série A</option>
+          <option value="PPL">Liga Profesional (Argentina)</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <div><button class="btn-main" id="loadBtn">▶ BUSCAR JOGOS</button></div>
+      <div><button class="btn-ghost" id="demoBtn">USAR DADOS DE EXEMPLO</button></div>
+    </div>
+    <div class="hint">
+      Crie sua key grátis em <a href="https://www.football-data.org/client/register" target="_blank">football-data.org/client/register</a> (plano free: ~10 requisições/min).
+      Esse plano cobre jogos, resultados e classificação — <b>não</b> inclui escanteios/cartões/chutes, que você preenche manualmente abaixo com dados reais (FotMob/Sofascore/WhoScored) para o motor calcular a projeção.
+      Sua key fica só nesta sessão do navegador, nunca é salva.
+    </div>
+  </div>
+
+  <div class="panel" id="matchesPanel" style="display:none;">
+    <h2>Jogos encontrados</h2>
+    <div class="matches" id="matchesList"></div>
+  </div>
+
+  <div id="analysisArea"></div>
+
+  <div class="panel">
+    <h2>Estatísticas reais (opcional — refina a projeção)</h2>
+    <div class="manual-grid" id="manualGrid"></div>
+    <div class="row" style="margin-top:12px;">
+      <div><button class="btn-main" id="recalcBtn">🔄 RECALCULAR COM ESSES DADOS</button></div>
+    </div>
+    <div class="hint">Preencha médias por jogo (temporada atual). Deixe em branco o que não tiver — o modelo usa só o que for informado.</div>
+  </div>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let currentMatches = [];
+let selectedMatch = null;
+let currentStandings = {}; // teamId -> {playedGames, goalsFor, goalsAgainst, form}
+let statusEl = $('statusBox');
+
+function setStatus(msg, ok){
+  statusEl.innerHTML = msg;
+  statusEl.style.color = ok ? 'var(--cyan)' : 'var(--muted)';
+}
+
+// ---------- DEMO DATA (used if no API key / offline / for quick testing) ----------
+const DEMO_MATCHES = [
+  {id:1, league:'Premier League', home:'Arsenal', away:'Chelsea', date:'2026-07-26 16:30',
+    homeStats:{gf:2.1, ga:0.9, form:['W','W','D','W','L'], corners:6.4, cards:1.6, shots:14.2},
+    awayStats:{gf:1.6, ga:1.3, form:['W','D','L','W','W'], corners:5.1, cards:2.1, shots:11.8}},
+  {id:2, league:'La Liga', home:'Real Madrid', away:'Sevilla', date:'2026-07-27 18:00',
+    homeStats:{gf:2.4, ga:0.8, form:['W','W','W','D','W'], corners:6.9, cards:1.4, shots:15.6},
+    awayStats:{gf:1.1, ga:1.5, form:['L','D','W','L','D'], corners:4.6, cards:2.4, shots:9.7}},
+  {id:3, league:'Brasileirão Série A', home:'Flamengo', away:'Palmeiras', date:'2026-07-27 20:00',
+    homeStats:{gf:1.9, ga:1.0, form:['W','D','W','W','D'], corners:5.8, cards:2.0, shots:13.1},
+    awayStats:{gf:1.7, ga:0.9, form:['W','W','D','L','W'], corners:5.5, cards:2.3, shots:12.4}},
+];
+
+$('demoBtn').addEventListener('click', () => {
+  currentMatches = DEMO_MATCHES;
+  renderMatches();
+  setStatus('Modo exemplo ativo · dados ilustrativos', true);
+});
+
+// Verifica se o servidor local já tem uma key configurada em .env (não expõe a key em si, só a flag).
+const isLocalServer = ['localhost','127.0.0.1'].includes(location.hostname);
+if(isLocalServer){
+  fetch('/api/config').then(r => r.json()).then(cfg => {
+    if(cfg.hasServerKey){
+      $('fdKey').placeholder = 'já configurada no servidor (.env) — opcional sobrescrever';
+      setStatus('Servidor com API key configurada · pronto pra buscar', true);
+    }
+  }).catch(() => {});
+}
+
+// ---------- FOOTBALL-DATA.ORG FETCH ----------
+$('loadBtn').addEventListener('click', async () => {
+  const key = $('fdKey').value.trim();
+  const league = $('league').value;
+  if(!isLocalServer){
+    showToast('Busca ao vivo via football-data.org só funciona rodando o servidor local (node server.js), que faz o proxy da API. Nesta prévia, use "DADOS DE EXEMPLO".');
+    return;
+  }
+  setStatus('Buscando jogos...', true);
+  currentStandings = {};
+  const authHeaders = key ? {'X-Auth-Token': key} : {}; // vazio = servidor usa a key padrão do .env
+  try{
+    const res = await fetch(`/api/matches/${league}`, {
+      headers: authHeaders
+    });
+    if(!res.ok){
+      if(res.status === 429) throw new Error('Limite de requisições atingido (plano free ~10/min). Espere um instante e tente de novo.');
+      throw new Error('Erro '+res.status+' — verifique a key ou tente novamente em instantes.');
+    }
+    const data = await res.json();
+    const matches = (data.matches || []).slice(0,12).map(m => ({
+      id:m.id, league:data.competition?.name || league,
+      home:m.homeTeam.name, away:m.awayTeam.name,
+      homeTeamId:m.homeTeam.id, awayTeamId:m.awayTeam.id,
+      date:(m.utcDate||'').replace('T',' ').slice(0,16),
+      homeStats:null, awayStats:null // preenchido a partir da classificação real ao selecionar o jogo
+    }));
+    if(matches.length === 0){ setStatus('Nenhum jogo agendado encontrado nessa liga agora.', true); return; }
+    currentMatches = matches;
+    renderMatches();
+    setStatus('<b>'+matches.length+'</b> jogos carregados via football-data.org · buscando classificação...', true);
+
+    // Busca a classificação da liga (gols pró/contra e jogos disputados reais por time).
+    // Uma única chamada cobre todos os times da liga — não conta contra o limite por jogo.
+    try{
+      const stRes = await fetch(`/api/standings/${league}`, { headers: authHeaders });
+      if(stRes.ok){
+        const stData = await stRes.json();
+        const table = (stData.standings || []).find(s => s.type === 'TOTAL')?.table || [];
+        table.forEach(row => {
+          currentStandings[row.team.id] = {
+            playedGames: row.playedGames,
+            goalsFor: row.goalsFor,
+            goalsAgainst: row.goalsAgainst,
+            form: row.form || null // nem toda liga/plano retorna form
+          };
+        });
+        setStatus('<b>'+matches.length+'</b> jogos + classificação real carregados via football-data.org', true);
+      } else {
+        setStatus('<b>'+matches.length+'</b> jogos carregados · classificação indisponível (usando médias neutras)', true);
+      }
+    }catch(stErr){
+      setStatus('<b>'+matches.length+'</b> jogos carregados · classificação indisponível (usando médias neutras)', true);
+    }
+  }catch(err){
+    setStatus('Falha na conexão', false);
+    showToast('⚠ '+err.message+'\n\nSe persistir, verifique a API key ou use "DADOS DE EXEMPLO".');
+  }
+});
+
+function showToast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.style.whiteSpace = 'pre-line';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 7000);
+}
+
+// ---------- RENDER MATCH LIST ----------
+function renderMatches(){
+  $('matchesPanel').style.display = 'block';
+  const list = $('matchesList');
+  list.innerHTML = '';
+  currentMatches.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'match-card';
+    card.innerHTML = `<div class="lg">${m.league}</div><div class="teams">${m.home} × ${m.away}</div><div class="date">${m.date}</div>`;
+    card.addEventListener('click', () => selectMatch(m, card));
+    list.appendChild(card);
+  });
+}
+
+function selectMatch(m, cardEl){
+  document.querySelectorAll('.match-card').forEach(c=>c.classList.remove('active'));
+  cardEl.classList.add('active');
+  selectedMatch = m;
+  // gols/forma vêm da classificação real da liga (buscada junto com os jogos); escanteios/cartões/chutes
+  // continuam manuais pois o plano free do football-data.org não os fornece.
+  if(!m.homeStats){
+    m.homeStats = buildStatsFromStandings(m.homeTeamId);
+    m.awayStats = buildStatsFromStandings(m.awayTeamId);
+  }
+  buildManualInputs(m);
+  renderAnalysis(m);
+}
+
+function buildStatsFromStandings(teamId){
+  const entry = currentStandings[teamId];
+  if(entry && entry.playedGames > 0){
+    return {
+      gf: +(entry.goalsFor / entry.playedGames).toFixed(2),
+      ga: +(entry.goalsAgainst / entry.playedGames).toFixed(2),
+      form: entry.form ? entry.form.split(',').filter(Boolean).slice(-5) : null,
+      corners:null, cards:null, shots:null
+    };
+  }
+  // sem classificação disponível para esse time (falha na chamada, ou liga sem dado) — média neutra, forma desconhecida
+  return {gf:1.3, ga:1.3, form:null, corners:null, cards:null, shots:null};
+}
+
+// ---------- MANUAL STAT INPUTS ----------
+function buildManualInputs(m){
+  const grid = $('manualGrid');
+  grid.innerHTML = `
+    <div class="manual-col">
+      <h4>${m.home} (casa)</h4>
+      <div class="manual-row"><label>Escanteios/jogo</label><input id="h_corners" type="number" step="0.1" value="${m.homeStats.corners ?? ''}"></div>
+      <div class="manual-row"><label>Cartões/jogo</label><input id="h_cards" type="number" step="0.1" value="${m.homeStats.cards ?? ''}"></div>
+      <div class="manual-row"><label>Chutes ao gol/jogo</label><input id="h_shots" type="number" step="0.1" value="${m.homeStats.shots ?? ''}"></div>
+    </div>
+    <div class="manual-col">
+      <h4>${m.away} (fora)</h4>
+      <div class="manual-row"><label>Escanteios/jogo</label><input id="a_corners" type="number" step="0.1" value="${m.awayStats.corners ?? ''}"></div>
+      <div class="manual-row"><label>Cartões/jogo</label><input id="a_cards" type="number" step="0.1" value="${m.awayStats.cards ?? ''}"></div>
+      <div class="manual-row"><label>Chutes ao gol/jogo</label><input id="a_shots" type="number" step="0.1" value="${m.awayStats.shots ?? ''}"></div>
+    </div>`;
+}
+
+$('recalcBtn').addEventListener('click', () => {
+  if(!selectedMatch){ showToast('Selecione um jogo primeiro.'); return; }
+  selectedMatch.homeStats.corners = parseFloat($('h_corners').value) || null;
+  selectedMatch.homeStats.cards = parseFloat($('h_cards').value) || null;
+  selectedMatch.homeStats.shots = parseFloat($('h_shots').value) || null;
+  selectedMatch.awayStats.corners = parseFloat($('a_corners').value) || null;
+  selectedMatch.awayStats.cards = parseFloat($('a_cards').value) || null;
+  selectedMatch.awayStats.shots = parseFloat($('a_shots').value) || null;
+  renderAnalysis(selectedMatch);
+});
+
+// ---------- STATISTICAL MODEL ----------
+function poissonWinProb(gfH, gaH, gfA, gaA){
+  // simple expected-goals model from average goals for/against
+  const lambdaH = (gfH + gaA) / 2;
+  const lambdaA = (gfA + gaH) / 2;
+  const totalXG = lambdaH + lambdaA;
+  const diff = lambdaH - lambdaA;
+  // logistic squashing of xG diff -> win prob, capped sensibly
+  const homeWin = clamp(50 + diff*18, 8, 88);
+  const awayWin = clamp(50 - diff*18, 8, 88);
+  const draw = clamp(100 - homeWin - awayWin, 0, 100);
+  const norm = homeWin + awayWin + draw;
+  return {
+    home: Math.round(homeWin/norm*100),
+    draw: Math.round(draw/norm*100),
+    away: Math.round(awayWin/norm*100),
+    totalXG
+  };
+}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+function over25Prob(totalXG){
+  // rough mapping of expected goals to P(over 2.5)
+  return Math.round(clamp(28 + (totalXG-2.0)*24, 8, 92));
+}
+function bttsProb(gfH,gaH,gfA,gaA){
+  const base = ((gfH+gaA)/2 + (gfA+gaH)/2) / 2;
+  return Math.round(clamp(30 + (base-1.2)*30, 10, 90));
+}
+function firstHalfGoalProb(totalXG){
+  return Math.round(clamp(35 + (totalXG-2.2)*14, 25, 78));
+}
+function formHtml(arr){
+  if(!arr || arr.length === 0) return `<span class="stat-sub">forma indisponível nesta liga/plano</span>`;
+  return arr.map(r => `<span class="f${r}">${r}</span>`).join('');
+}
+
+function renderAnalysis(m){
+  const hs = m.homeStats, as_ = m.awayStats;
+  const wp = poissonWinProb(hs.gf, hs.ga, as_.gf, as_.ga);
+  const o25 = over25Prob(wp.totalXG);
+  const btts = bttsProb(hs.gf, hs.ga, as_.gf, as_.ga);
+  const fh = firstHalfGoalProb(wp.totalXG);
+
+  const cH = hs.corners, cA = as_.corners;
+  const kH = hs.cards, kA = as_.cards;
+  const sH = hs.shots, sA = as_.shots;
+  const hasCorners = cH!=null && cA!=null;
+  const hasCards = kH!=null && kA!=null;
+  const hasShots = sH!=null && sA!=null;
+
+  // best entry logic — pick the strongest signal
+  let bestLabel, bestReason;
+  const signals = [
+    {label:`${wp.home > wp.away ? m.home : m.away} vencer`, val:Math.max(wp.home,wp.away), reason:'maior probabilidade de resultado no modelo de xG'},
+    {label:o25>=60?'Mais de 2.5 gols':'Menos de 2.5 gols', val:o25>=60?o25:100-o25, reason:'expectativa de gols do confronto'},
+    {label:btts>=60?'Ambas marcam - Sim':'Ambas marcam - Não', val:btts>=60?btts:100-btts, reason:'perfil ofensivo/defensivo das duas equipes'}
+  ];
+  if(hasCorners){
+    const moreCorners = cH>=cA ? m.home : m.away;
+    signals.push({label:`${moreCorners} - mais escanteios`, val:60, reason:'média de escanteios superior'});
+  }
+  signals.sort((a,b)=>b.val-a.val);
+  bestLabel = signals[0].label;
+  bestReason = signals[0].reason;
+
+  // confidence badge — margin between top signal and runner-up (presentation only, no change to underlying calc)
+  const margin = signals[0].val - (signals[1] ? signals[1].val : 0);
+  const conf = margin>=15 ? {cls:'conf-alta', label:'ALTA CONFIANÇA'}
+             : margin>=7  ? {cls:'conf-media', label:'CONFIANÇA MÉDIA'}
+             : {cls:'conf-baixa', label:'CONFIANÇA BAIXA'};
+
+  const area = $('analysisArea');
+  area.innerHTML = `
+  <div class="panel">
+    <h2>Confronto</h2>
+    <div class="scoreboard">
+      <div class="team">
+        <div class="name">${m.home}</div>
+        <div class="form">${formHtml(hs.form)}</div>
+      </div>
+      <div class="vs">VS</div>
+      <div class="team">
+        <div class="name">${m.away}</div>
+        <div class="form">${formHtml(as_.form)}</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <h3>Probabilidade de vitória</h3>
+        ${splitBarHtml(wp.home, wp.draw, wp.away, m.home, m.away)}
+      </div>
+
+      <div class="stat-card">
+        <h3>Mais de 2.5 gols</h3>
+        ${radialGaugeHtml(o25, 'var(--cyan)')}
+        <div class="stat-sub" style="text-align:center;">xG total estimado: ${wp.totalXG.toFixed(2)}</div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Ambas marcam (BTTS)</h3>
+        ${radialGaugeHtml(btts, 'var(--gold)')}
+      </div>
+
+      <div class="stat-card">
+        <h3>Gol no 1º tempo</h3>
+        ${radialGaugeHtml(fh, 'var(--purple)')}
+      </div>
+
+      <div class="stat-card">
+        <h3>Escanteios projetados</h3>
+        ${hasCorners ? dualBarHtml(m.home, cH, m.away, cA) : `<div class="stat-sub">Preencha os dados reais de escanteio abaixo para gerar essa projeção.</div>`}
+      </div>
+
+      <div class="stat-card">
+        <h3>Cartões projetados</h3>
+        ${hasCards ? dualBarHtml(m.home, kH, m.away, kA) : `<div class="stat-sub">Preencha os dados reais de cartões abaixo para gerar essa projeção.</div>`}
+      </div>
+
+      <div class="stat-card">
+        <h3>Chutes ao gol projetados</h3>
+        ${hasShots ? dualBarHtml(m.home, sH, m.away, sA) : `<div class="stat-sub">Preencha os dados reais de chutes ao gol abaixo para gerar essa projeção.</div>`}
+      </div>
+    </div>
+
+    <div class="best-entry">
+      <h2>🎯 Melhor entrada (segundo o modelo)</h2>
+      <div class="pick">${bestLabel}</div>
+      <div class="confidence ${conf.cls}">${conf.label}</div>
+      <div class="stat-sub">Base: ${bestReason}. Isto é uma leitura estatística, não uma garantia — sempre cheque desfalques, escalação e contexto da rodada antes de decidir.</div>
+    </div>
+  </div>`;
+
+  animateVisuals(area);
+}
+
+// ---------- VISUAL COMPONENTS (presentation only — no calc logic here) ----------
+const RADIAL_CIRC = 2 * Math.PI * 34; // matches r=34 in .radial-fill
+
+function radialGaugeHtml(pct, color){
+  return `
+    <div class="radial-wrap">
+      <svg class="radial-svg" viewBox="0 0 80 80">
+        <circle class="radial-bg" cx="40" cy="40" r="34"></circle>
+        <circle class="radial-fill" data-pct="${pct}" style="stroke:${color}" cx="40" cy="40" r="34"></circle>
+      </svg>
+      <div class="radial-label"><span class="count-up" data-target="${pct}">0</span>%</div>
+    </div>`;
+}
+
+function splitBarHtml(home, draw, away, homeName, awayName){
+  return `
+    <div class="split-bar">
+      <div class="seg seg-home" data-target="${home}"></div>
+      <div class="seg seg-draw" data-target="${draw}"></div>
+      <div class="seg seg-away" data-target="${away}"></div>
+    </div>
+    <div class="split-legend">
+      <div class="lh">${homeName}<b><span class="count-up" data-target="${home}">0</span>%</b></div>
+      <div class="ld">Empate<b><span class="count-up" data-target="${draw}">0</span>%</b></div>
+      <div class="la">${awayName}<b><span class="count-up" data-target="${away}">0</span>%</b></div>
+    </div>`;
+}
+
+function dualBarHtml(homeName, homeVal, awayName, awayVal){
+  const total = homeVal + awayVal;
+  const homePct = total>0 ? (homeVal/total*100) : 0;
+  const awayPct = total>0 ? (awayVal/total*100) : 0;
+  return `
+    <div class="dual-row">
+      <div class="dual-label">${homeName}</div>
+      <div class="dual-track"><div class="dual-fill dual-home" data-target="${homePct}"></div></div>
+      <div class="dual-num">${homeVal.toFixed(1)}</div>
+    </div>
+    <div class="dual-row">
+      <div class="dual-label">${awayName}</div>
+      <div class="dual-track"><div class="dual-fill dual-away" data-target="${awayPct}"></div></div>
+      <div class="dual-num">${awayVal.toFixed(1)}</div>
+    </div>
+    <div class="dual-total">Total combinado: <b>${total.toFixed(1)}</b></div>`;
+}
+
+function animateVisuals(container){
+  // two rAF ticks so the browser paints the 0% state before transitioning to target (CSS transition needs that)
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    container.querySelectorAll('.radial-fill').forEach(el => {
+      const pct = parseFloat(el.dataset.pct) || 0;
+      el.style.strokeDashoffset = RADIAL_CIRC - (RADIAL_CIRC * pct / 100);
+    });
+    container.querySelectorAll('.seg, .dual-fill').forEach(el => {
+      el.style.width = (parseFloat(el.dataset.target) || 0) + '%';
+    });
+  }));
+  container.querySelectorAll('.count-up').forEach(el => animateNumber(el, parseFloat(el.dataset.target) || 0));
+}
+
+function animateNumber(el, target, duration){
+  duration = duration || 900;
+  const start = performance.now();
+  function tick(now){
+    const p = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    el.textContent = Math.round(target * eased);
+    if(p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+</script>
+</body>
+</html>

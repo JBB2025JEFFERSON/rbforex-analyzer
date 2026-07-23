@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: rbforex-analyzer
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: FOOTBALL_DATA_KEY
+        sync: false
