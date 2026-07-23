@@ -178,15 +178,25 @@
         <input id="fdKey" type="password" placeholder="cole sua key aqui">
       </div>
       <div>
-        <label>Liga</label>
+        <label>Liga / Competição</label>
         <select id="league">
-          <option value="PL">Premier League (Inglaterra)</option>
-          <option value="PD">La Liga (Espanha)</option>
-          <option value="BL1">Bundesliga (Alemanha)</option>
-          <option value="SA">Serie A (Itália)</option>
-          <option value="FL1">Ligue 1 (França)</option>
-          <option value="BSA">Brasileirão Série A</option>
-          <option value="PPL">Liga Profesional (Argentina)</option>
+          <optgroup label="Ligas nacionais">
+            <option value="PL">Premier League (Inglaterra)</option>
+            <option value="ELC">Championship (Inglaterra 2ª div.)</option>
+            <option value="PD">La Liga (Espanha)</option>
+            <option value="BL1">Bundesliga (Alemanha)</option>
+            <option value="SA">Serie A (Itália)</option>
+            <option value="FL1">Ligue 1 (França)</option>
+            <option value="DED">Eredivisie (Holanda)</option>
+            <option value="PPL">Primeira Liga (Portugal)</option>
+            <option value="BSA">Brasileirão Série A</option>
+          </optgroup>
+          <optgroup label="Copas e seleções">
+            <option value="CL">UEFA Champions League</option>
+            <option value="CLI">Copa Libertadores</option>
+            <option value="EC">Eurocopa</option>
+            <option value="WC">Copa do Mundo FIFA</option>
+          </optgroup>
         </select>
       </div>
     </div>
@@ -197,6 +207,7 @@
     <div class="hint">
       Crie sua key grátis em <a href="https://www.football-data.org/client/register" target="_blank">football-data.org/client/register</a> (plano free: ~10 requisições/min).
       Esse plano cobre jogos, resultados e classificação — <b>não</b> inclui escanteios/cartões/chutes, que você preenche manualmente abaixo com dados reais (FotMob/Sofascore/WhoScored) para o motor calcular a projeção.
+      A lista acima é <b>todo o catálogo gratuito</b> da football-data.org (13 competições) — cobre os principais campeonatos que casas como Bet365/Betano/Superbet também listam, mas não é literalmente toda liga do mundo (ligas menores/regionais exigem plano pago da API).
       Sua key fica só nesta sessão do navegador, nunca é salva.
     </div>
   </div>
