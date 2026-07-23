@@ -250,23 +250,31 @@ $('demoBtn').addEventListener('click', () => {
   setStatus('Modo exemplo ativo · dados ilustrativos', true);
 });
 
-// Verifica se o servidor local já tem uma key configurada em .env (não expõe a key em si, só a flag).
-const isLocalServer = ['localhost','127.0.0.1'].includes(location.hostname);
-if(isLocalServer){
-  fetch('/api/config').then(r => r.json()).then(cfg => {
-    if(cfg.hasServerKey){
-      $('fdKey').placeholder = 'já configurada no servidor (.env) — opcional sobrescrever';
-      setStatus('Servidor com API key configurada · pronto pra buscar', true);
-    }
-  }).catch(() => {});
-}
+// Detecta se existe um backend real por trás (nosso server.js — local ou hospedado, ex: Render).
+// Se /api/config responder, é porque tem proxy/servidor de verdade; se falhar (404/erro de rede),
+// é uma página estática sem backend (ex: prévia via Artifact) e a busca ao vivo não vai funcionar.
+let hasBackend = false;
+fetch('/api/config').then(r => {
+  if(!r.ok) throw new Error('sem backend');
+  return r.json();
+}).then(cfg => {
+  hasBackend = true;
+  if(cfg.hasServerKey){
+    $('fdKey').placeholder = 'já configurada no servidor (.env) — opcional sobrescrever';
+    setStatus('Servidor com API key configurada · pronto pra buscar', true);
+  } else {
+    setStatus('Servidor no ar · cole sua API key pra buscar', true);
+  }
+}).catch(() => {
+  hasBackend = false;
+});
 
 // ---------- FOOTBALL-DATA.ORG FETCH ----------
 $('loadBtn').addEventListener('click', async () => {
   const key = $('fdKey').value.trim();
   const league = $('league').value;
-  if(!isLocalServer){
-    showToast('Busca ao vivo via football-data.org só funciona rodando o servidor local (node server.js), que faz o proxy da API. Nesta prévia, use "DADOS DE EXEMPLO".');
+  if(!hasBackend){
+    showToast('Busca ao vivo via football-data.org precisa de um servidor de verdade por trás (local ou hospedado) fazendo o proxy da API. Nesta prévia estática, use "DADOS DE EXEMPLO".');
     return;
   }
   setStatus('Buscando jogos...', true);
