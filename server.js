@@ -74,6 +74,62 @@ app.get('/api/sudamericana/matches', async (req, res) => {
   }
 });
 
+// ---------- ODDS REAIS (Bet365 / Betano BR via odds-api.io) ----------
+// Fonte de odds de mercado de verdade — usada pra probabilidade de resultado/over-under/BTTS/escanteios/cartões
+// e pros mercados por jogador (chutes ao gol, cartão). Plano free: 5.000 req/hora, 2 bookmakers selecionados na conta.
+const ODDS_API_BASE = 'https://api.odds-api.io/v3';
+const ODDS_API_KEY = process.env.ODDS_API_KEY || null;
+const ODDS_BOOKMAKERS = 'Bet365,Betano BR';
+
+// Ligas com cobertura de odds reais confirmada nesta conta odds-api.io (slugs verificados manualmente em /leagues).
+const ODDS_LEAGUES = [
+  { code: 'england-premier-league', name: 'Premier League (Inglaterra)' },
+  { code: 'england-championship', name: 'Championship (Inglaterra 2ª div.)' },
+  { code: 'spain-laliga', name: 'La Liga (Espanha)' },
+  { code: 'germany-bundesliga', name: 'Bundesliga (Alemanha)' },
+  { code: 'italy-serie-a', name: 'Serie A (Itália)' },
+  { code: 'france-ligue-1', name: 'Ligue 1 (França)' },
+  { code: 'netherlands-eredivisie', name: 'Eredivisie (Holanda)' },
+  { code: 'portugal-liga-portugal', name: 'Primeira Liga (Portugal)' },
+  { code: 'brazil-brasileiro-serie-a', name: 'Brasileirão Série A' },
+  { code: 'international-clubs-uefa-champions-league-qualification', name: 'UEFA Champions League' },
+  { code: 'international-clubs-uefa-europa-league-qualification', name: 'UEFA Europa League' },
+  { code: 'international-clubs-conmebol-libertadores-knockout-stage', name: 'Copa Libertadores' },
+  { code: 'international-clubs-conmebol-sudamericana-knockout-stage', name: 'Copa Sul-Americana' }
+];
+
+app.get('/api/odds/leagues', (req, res) => {
+  res.json({ leagues: ODDS_LEAGUES, hasKey: !!ODDS_API_KEY });
+});
+
+app.get('/api/odds/events', async (req, res) => {
+  if (!ODDS_API_KEY) return res.status(400).json({ error: 'ODDS_API_KEY não configurada no servidor.' });
+  const league = req.query.league;
+  if (!league) return res.status(400).json({ error: 'Parâmetro league obrigatório.' });
+  try {
+    const url = `${ODDS_API_BASE}/events?apiKey=${ODDS_API_KEY}&sport=football&league=${encodeURIComponent(league)}&status=pending,live`;
+    const upstream = await fetch(url);
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    res.status(502).json({ error: 'Falha ao contatar odds-api.io', details: err.message });
+  }
+});
+
+app.get('/api/odds/match', async (req, res) => {
+  if (!ODDS_API_KEY) return res.status(400).json({ error: 'ODDS_API_KEY não configurada no servidor.' });
+  const eventId = req.query.eventId;
+  if (!eventId) return res.status(400).json({ error: 'Parâmetro eventId obrigatório.' });
+  try {
+    const url = `${ODDS_API_BASE}/odds?apiKey=${ODDS_API_KEY}&eventId=${encodeURIComponent(eventId)}&bookmakers=${encodeURIComponent(ODDS_BOOKMAKERS)}`;
+    const upstream = await fetch(url);
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    res.status(502).json({ error: 'Falha ao contatar odds-api.io', details: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`RBFOREX Analyzer rodando em http://localhost:${PORT}`);
 });

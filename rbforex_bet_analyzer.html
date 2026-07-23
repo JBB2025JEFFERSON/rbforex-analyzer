@@ -241,6 +241,30 @@
     <div class="hint">Preencha médias por jogo (temporada atual). Deixe em branco o que não tiver — o modelo usa só o que for informado.</div>
   </div>
 
+  <div class="panel" style="border-color:var(--gold);">
+    <h2>🎰 Odds reais (Bet365 / Betano)</h2>
+    <div class="cfg-grid">
+      <div>
+        <label>Liga (com odds reais)</label>
+        <select id="oddsLeague"></select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <div><button class="btn-main" id="oddsLoadBtn">▶ BUSCAR JOGOS COM ODDS REAIS</button></div>
+    </div>
+    <div class="hint">
+      Probabilidades convertidas de odds reais de mercado (Bet365 e/ou Betano BR) via odds-api.io — inclui resultado, over/under, BTTS, escanteios, cartões e <b>ranking de jogadores</b> (chutes ao gol, cartão), com nome real.
+      Cobertura depende do que essas casas já precificaram pra cada jogo (normalmente os próximos dias) — nem todo jogo/mercado tem odds disponíveis, e isso reflete só 1-2 casas, não o consenso do mercado inteiro.
+    </div>
+  </div>
+
+  <div class="panel" id="oddsMatchesPanel" style="display:none;border-color:var(--gold);">
+    <h2>Jogos com odds reais</h2>
+    <div class="matches" id="oddsMatchesList"></div>
+  </div>
+
+  <div id="oddsAnalysisArea"></div>
+
 </div>
 
 <script>
@@ -291,6 +315,19 @@ fetch('/api/config').then(r => {
   }
 }).catch(() => {
   hasBackend = false;
+});
+
+// Popula o select de ligas com odds reais (se o servidor tiver ODDS_API_KEY configurada).
+fetch('/api/odds/leagues').then(r => r.json()).then(data => {
+  const sel = $('oddsLeague');
+  sel.innerHTML = (data.leagues || []).map(l => `<option value="${l.code}">${l.name}</option>`).join('');
+  if(!data.hasKey){
+    $('oddsLoadBtn').disabled = true;
+    sel.disabled = true;
+    $('oddsLoadBtn').title = 'Servidor sem ODDS_API_KEY configurada';
+  }
+}).catch(() => {
+  $('oddsLoadBtn').disabled = true;
 });
 
 // Converte uma data/hora UTC (string ISO, com ou sem 'Z') para horário de Brasília (America/Sao_Paulo).
@@ -817,6 +854,280 @@ function animateNumber(el, target, duration){
     if(p < 1) requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
+}
+
+// ==================== ODDS REAIS (Bet365 / Betano BR) ====================
+// Tudo aqui vem de odds de mercado reais (via odds-api.io) convertidas em probabilidade implícita —
+// nenhum número é inventado; quando um mercado não existe pro jogo, mostramos "indisponível" em vez de estimar.
+let currentOddsMatches = [];
+const ODDS_BOOKIE_PRIORITY = ['Bet365','Betano BR'];
+
+$('oddsLoadBtn').addEventListener('click', async () => {
+  if(!hasBackend){
+    showToast('Odds reais precisam de um servidor de verdade por trás (local ou hospedado). Nesta prévia estática, isso não funciona.');
+    return;
+  }
+  const league = $('oddsLeague').value;
+  if(!league){ showToast('Selecione uma liga.'); return; }
+  try{
+    const res = await fetch(`/api/odds/events?league=${encodeURIComponent(league)}`);
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.error || ('Erro '+res.status));
+    }
+    const events = await res.json();
+    currentOddsMatches = (Array.isArray(events) ? events : []).slice(0, 20);
+    renderOddsMatches();
+  }catch(err){
+    showToast('⚠ '+err.message);
+  }
+});
+
+function renderOddsMatches(){
+  $('oddsMatchesPanel').style.display = 'block';
+  const list = $('oddsMatchesList');
+  list.innerHTML = '';
+  if(currentOddsMatches.length === 0){
+    list.innerHTML = `<div class="empty">Nenhum jogo com odds encontrado nessa liga agora.</div>`;
+    return;
+  }
+  currentOddsMatches.forEach(ev => {
+    const card = document.createElement('div');
+    card.className = 'match-card';
+    const soonBadge = isStartingSoon(ev.date) ? `<div class="soon-badge">⏰ COMEÇA EM BREVE</div>` : '';
+    card.innerHTML = `${soonBadge}<div class="lg">${ev.league ? ev.league.name : ''}</div><div class="teams">${ev.home} × ${ev.away}</div><div class="date">${toBrasiliaTime(ev.date)}</div>`;
+    card.addEventListener('click', () => { document.querySelectorAll('#oddsMatchesList .match-card').forEach(c=>c.classList.remove('active')); card.classList.add('active'); selectOddsMatch(ev); });
+    list.appendChild(card);
+  });
+}
+
+async function selectOddsMatch(ev){
+  const area = $('oddsAnalysisArea');
+  area.innerHTML = `<div class="panel" style="border-color:var(--gold);"><div class="empty">Buscando odds reais...</div></div>`;
+  try{
+    const res = await fetch(`/api/odds/match?eventId=${encodeURIComponent(ev.id)}`);
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.error || ('Erro '+res.status));
+    }
+    const data = await res.json();
+    renderOddsAnalysis(ev, data);
+  }catch(err){
+    area.innerHTML = `<div class="panel" style="border-color:var(--red);"><div class="stat-sub" style="color:var(--red);">⚠ ${err.message}</div></div>`;
+  }
+}
+
+// ---------- parsing de odds reais -> probabilidade implícita ----------
+function findMarketAcrossBookies(oddsData, marketName, sourcesUsed){
+  if(!oddsData || !oddsData.bookmakers) return null;
+  for(const name of ODDS_BOOKIE_PRIORITY){
+    const list = oddsData.bookmakers[name];
+    if(!list) continue;
+    const found = list.find(m => m.name === marketName);
+    if(found){ if(sourcesUsed) sourcesUsed.add(name); return {source:name, market:found}; }
+  }
+  return null;
+}
+function pickOddsRow(market, targetHdp){
+  if(!market || !market.odds || !market.odds.length) return null;
+  if(targetHdp == null) return market.odds[0];
+  let best = null, bestDiff = Infinity;
+  market.odds.forEach(row => {
+    if(row.hdp == null) return;
+    const diff = Math.abs(row.hdp - targetHdp);
+    if(diff < bestDiff){ bestDiff = diff; best = row; }
+  });
+  return best || market.odds[0];
+}
+function decOdd(x){ const v = parseFloat(x); return (isFinite(v) && v>0) ? v : null; }
+function twoWayProb(oddA, oddB){
+  const pA = oddA ? 1/oddA : 0, pB = oddB ? 1/oddB : 0;
+  const s = pA+pB;
+  if(!s) return null;
+  return {a: Math.round(pA/s*100), b: Math.round(pB/s*100)};
+}
+function threeWayProb(oddH, oddD, oddA){
+  const pH = oddH?1/oddH:0, pD=oddD?1/oddD:0, pA=oddA?1/oddA:0;
+  const s=pH+pD+pA;
+  if(!s) return null;
+  return {home:Math.round(pH/s*100), draw:Math.round(pD/s*100), away:Math.round(pA/s*100)};
+}
+function playerListFromMarket(marketResult, limit){
+  if(!marketResult) return [];
+  const rows = marketResult.market.odds || [];
+  return rows
+    .map(r => {
+      const cleanName = (r.label||'').replace(/\s*\(\d+\)\s*$/,'').replace(' (Booked)','').trim();
+      const odd = decOdd(r.over);
+      return odd ? {name:cleanName, prob: Math.round(100/odd)} : null;
+    })
+    .filter(Boolean)
+    .sort((a,b)=>b.prob-a.prob)
+    .slice(0, limit);
+}
+function playerRankHtml(list){
+  if(!list.length) return `<div class="stat-sub">Mercado não disponível pra esse jogo na Bet365/Betano.</div>`;
+  return list.map((p,i) => `
+    <div class="dual-row" style="grid-template-columns:28px 1fr 50px;">
+      <div class="dual-label">${i+1}º</div>
+      <div class="dual-label" style="color:var(--text);white-space:normal;">${p.name}</div>
+      <div class="dual-num">${p.prob}%</div>
+    </div>`).join('');
+}
+
+function renderOddsAnalysis(ev, oddsData){
+  const sourcesUsed = new Set();
+  const mk = name => findMarketAcrossBookies(oddsData, name, sourcesUsed);
+
+  const mlR = mk('ML');
+  const mlRow = mlR ? pickOddsRow(mlR.market) : null;
+  const wp = mlRow ? threeWayProb(decOdd(mlRow.home), decOdd(mlRow.draw), decOdd(mlRow.away)) : null;
+
+  const totalsR = mk('Totals') || mk('Goals Over/Under');
+  const totalsRow = totalsR ? pickOddsRow(totalsR.market, 2.5) : null;
+  const o25 = totalsRow ? twoWayProb(decOdd(totalsRow.over), decOdd(totalsRow.under)) : null;
+  const o25Line = totalsRow ? totalsRow.hdp : null;
+
+  const bttsR = mk('Both Teams To Score');
+  const bttsRow = bttsR ? pickOddsRow(bttsR.market) : null;
+  const btts = bttsRow ? twoWayProb(decOdd(bttsRow.yes), decOdd(bttsRow.no)) : null;
+
+  const cornersR = mk('Corners Totals') || mk('Corners 2-Way');
+  const cornersRow = cornersR ? pickOddsRow(cornersR.market, 9.5) : null;
+  const corners = (cornersRow && cornersRow.over && cornersRow.under) ? twoWayProb(decOdd(cornersRow.over), decOdd(cornersRow.under)) : null;
+  const cornersLine = cornersRow ? cornersRow.hdp : null;
+
+  const bookingsR = mk('Bookings Totals') || mk('Number of Cards In Match');
+  const bookingsRow = bookingsR ? pickOddsRow(bookingsR.market, 4.5) : null;
+  const bookings = bookingsRow ? twoWayProb(decOdd(bookingsRow.over), decOdd(bookingsRow.under)) : null;
+  const bookingsLine = bookingsRow ? bookingsRow.hdp : null;
+
+  const shotsR = mk('Player Shots on Target');
+  const topShooters = playerListFromMarket(shotsR, 5);
+
+  const cardsR = mk('Player to be Booked');
+  const topCarded = playerListFromMarket(cardsR, 5);
+
+  const hasAnyData = !!(wp || o25 || btts || corners || bookings || topShooters.length || topCarded.length);
+  const area = $('oddsAnalysisArea');
+
+  if(!hasAnyData){
+    area.innerHTML = `
+    <div class="panel" style="border-color:var(--red);">
+      <h2 style="color:var(--red);">⚠️ Sem odds cadastradas pra esse jogo</h2>
+      <div class="stat-sub">A Bet365/Betano BR ainda não precificaram esse confronto — tente outro jogo, de preferência mais próximo da data (odds costumam aparecer nos dias antes do jogo).</div>
+    </div>`;
+    return;
+  }
+
+  area.innerHTML = `
+  <div class="panel" style="border-color:var(--gold);">
+    <h2>🎰 ${ev.home} x ${ev.away}</h2>
+    <div class="stat-sub">${toBrasiliaTime(ev.date)} · Fonte: ${Array.from(sourcesUsed).join(' + ') || 'Bet365/Betano BR'} (odds reais de mercado)</div>
+
+    <div class="stats" style="margin-top:16px;">
+      ${wp ? `
+      <div class="stat-card">
+        <h3>Probabilidade de vitória (odds reais)</h3>
+        ${splitBarHtml(wp.home, wp.draw, wp.away, ev.home, ev.away)}
+      </div>` : ''}
+
+      ${o25 ? `
+      <div class="stat-card">
+        <h3>Mais/menos de ${o25Line} gols</h3>
+        ${radialGaugeHtml(o25.a, 'var(--cyan)')}
+        <div class="stat-sub" style="text-align:center;">Probabilidade de "mais de ${o25Line}"</div>
+      </div>` : ''}
+
+      ${btts ? `
+      <div class="stat-card">
+        <h3>Ambas marcam (BTTS)</h3>
+        ${radialGaugeHtml(btts.a, 'var(--gold)')}
+      </div>` : ''}
+
+      ${corners ? `
+      <div class="stat-card">
+        <h3>Escanteios: mais/menos de ${cornersLine}</h3>
+        ${radialGaugeHtml(corners.a, 'var(--purple)')}
+        <div class="stat-sub" style="text-align:center;">Probabilidade de "mais de ${cornersLine}"</div>
+      </div>` : ''}
+
+      ${bookings ? `
+      <div class="stat-card">
+        <h3>Cartões: mais/menos de ${bookingsLine}</h3>
+        ${radialGaugeHtml(bookings.a, 'var(--red)')}
+        <div class="stat-sub" style="text-align:center;">Probabilidade de "mais de ${bookingsLine}"</div>
+      </div>` : ''}
+    </div>
+
+    <div class="stats" style="margin-top:16px;">
+      <div class="stat-card">
+        <h3>🎯 Top 5 — chute ao gol</h3>
+        ${playerRankHtml(topShooters)}
+      </div>
+      <div class="stat-card">
+        <h3>🟨 Top 5 — chance de cartão</h3>
+        ${playerRankHtml(topCarded)}
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:14px;">⚠️ Baseado só em ${Array.from(sourcesUsed).join('/') || 'Bet365/Betano'} — não é o consenso do mercado inteiro, e odds mudam até o apito inicial. Confira a hora da última atualização na própria casa antes de apostar.</div>
+  </div>
+
+  <div class="panel" style="border-color:var(--gold);">
+    <h2>🎫 Bilhete (odds reais)</h2>
+    <pre class="ticket-box" id="oddsTicketBox"></pre>
+    <div class="row" style="margin-top:12px;">
+      <div><button class="btn-main" id="copyOddsTicketBtn">📋 COPIAR BILHETE</button></div>
+    </div>
+  </div>`;
+
+  $('oddsTicketBox').textContent = buildOddsTicketText({ev, wp, o25, o25Line, btts, corners, cornersLine, bookings, bookingsLine, topShooters, topCarded, sourcesUsed});
+  $('copyOddsTicketBtn').addEventListener('click', () => {
+    const text = $('oddsTicketBox').textContent;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(() => showToast('✅ Bilhete copiado! Cole onde quiser.')).catch(() => showToast('⚠ Não consegui copiar — selecione o texto manualmente.'));
+    }
+  });
+
+  animateVisuals(area);
+}
+
+function buildOddsTicketText(ctx){
+  const {ev, wp, o25, o25Line, btts, corners, cornersLine, bookings, bookingsLine, topShooters, topCarded, sourcesUsed} = ctx;
+  const lines = [];
+  lines.push('🎫 BRUNO & DIEGO — BILHETE (ODDS REAIS)');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push(`⚽ ${ev.home} x ${ev.away}`);
+  lines.push(`🗓 ${toBrasiliaTime(ev.date)}`);
+  if(ev.league) lines.push(`🏆 ${ev.league.name}`);
+  lines.push(`📡 Fonte: ${Array.from(sourcesUsed).join(' + ') || 'Bet365/Betano BR'} (odds de mercado reais)`);
+  lines.push('');
+  if(wp){
+    lines.push('📊 RESULTADO (probabilidade implícita real)');
+    lines.push(`   Vitória ${ev.home}: ${wp.home}%`);
+    lines.push(`   Empate: ${wp.draw}%`);
+    lines.push(`   Vitória ${ev.away}: ${wp.away}%`);
+  }
+  if(o25) lines.push(`   Mais de ${o25Line} gols: ${o25.a}%`);
+  if(btts) lines.push(`   Ambas marcam (BTTS): ${btts.a}%`);
+  if(corners) lines.push(`🚩 Mais de ${cornersLine} escanteios: ${corners.a}%`);
+  if(bookings) lines.push(`🟨 Mais de ${bookingsLine} cartões: ${bookings.a}%`);
+  if(topShooters.length){
+    lines.push('');
+    lines.push('🎯 TOP 5 — CHUTE AO GOL (mais de 0.5)');
+    topShooters.forEach((p,i) => lines.push(`   ${i+1}º ${p.name} — ${p.prob}%`));
+  }
+  if(topCarded.length){
+    lines.push('');
+    lines.push('🟨 TOP 5 — CHANCE DE CARTÃO (mais de 0.5)');
+    topCarded.forEach((p,i) => lines.push(`   ${i+1}º ${p.name} — ${p.prob}%`));
+  }
+  lines.push('');
+  lines.push('⚠️ Odds reais, mas de só 1-2 casas — não é o consenso do mercado. Odds mudam até o apito inicial.');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push('Gerado por BRUNO & DIEGO Analyzer');
+  return lines.join('\n');
 }
 </script>
 </body>
